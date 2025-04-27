@@ -43,6 +43,8 @@ void Session::set_tun_handler(std::shared_ptr<TunHandler> tun) {
 }
 
 void Session::handle_packet_from_tun(const Packet& packet, const std::string& dst_ip, uint16_t dst_port) {
+    std::cout << "payload size " << packet.payload().size() << std::endl;
+    std::cout << "payload content: " << std::string(packet.payload().begin(), packet.payload().end()) << std::endl;
     forwarder_->start_forwarding(dst_ip, dst_port, packet.payload(),
     [this](const std::vector<uint8_t>& response, bool is_complete){
         std::cout << "Received response from server" << std::endl;

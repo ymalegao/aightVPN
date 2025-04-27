@@ -7,17 +7,24 @@
 #include <string>
 #include "protocol/packet.hpp"
 #include "network/session.h"
+#include <csignal>   // For signal()
+#include <cstdlib>
 
 class Session;
 
 class TunHandler : public std::enable_shared_from_this<TunHandler>{
 public:
     TunHandler(boost::asio::io_context& io_context, const std::string& device_name);
+    void remove_route_for_domain(boost::asio::io_context& io_context, const std::string& domain_name, const std::string& tun_interface);
+
     void start();  // Begin reading from the TUN device
     void send_to_tun(const std::vector<uint8_t>& system_payload);  // Write back to the TUN device
     // void handle_vpn_response(const std::vector<uint8_t>& vpn_payload);
     void set_session(std::shared_ptr<Session> session);
     void handle_incoming_packet(const std::vector<uint8_t>& sys_packet);
+    boost::asio::io_context& get_io_context() { return io_context_; }
+    std::string get_tun_interface() { return tun_name.name; }
+
     private:
     void async_read_from_tun();
     void parse_system_packet(const std::vector<uint8_t>& data);
@@ -32,8 +39,6 @@ public:
     std::shared_ptr<Session> session_;
     std::shared_ptr<Session> system_session_;
     void add_route_for_domain(boost::asio::io_context& io_context, const std::string& domain_name, const std::string& tun_interface);
-
-
-
+    std::vector<uint8_t> syn_ack_generator(const std::vector<uint8_t>& synpacket);
 
 };

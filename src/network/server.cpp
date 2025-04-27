@@ -1,11 +1,22 @@
 #include "network/server.h"
 
 #include <iostream>
-
+static TunHandler* global_tun_handler = nullptr; // global pointer
+void handle_sigint(int sig) {
+    std::cout << "\n[VPN] Ctrl+C detected! Cleaning up..." << std::endl;
+    if (global_tun_handler != nullptr) {
+        global_tun_handler->remove_route_for_domain(global_tun_handler->get_io_context(), "example.com", global_tun_handler->get_tun_interface());
+    }
+    exit(0); // clean exit
+}
 Server::Server(boost::asio::io_context& io_context, boost::asio::io_context& tun_io_context, short port ): acceptor_(io_context, tcp::endpoint(tcp::v4(), port)), connection_id_(0)
     {
         // do_accept(tun_io_context);
         tun_handler_ = std::make_shared<TunHandler>(tun_io_context, "utun8");
+        global_tun_handler = tun_handler_.get(); // set global pointer
+        signal(SIGINT, handle_sigint); // <- this line hooks Ctrl+C!
+
+
         tun_handler_->start();
         do_accept(tun_io_context);
 

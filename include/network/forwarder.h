@@ -18,6 +18,9 @@ class Forwarder : public std::enable_shared_from_this<Forwarder> {
         Forwarder(boost::asio::io_context& io_context);
 
         using DataCallback = std::function<void(const std::vector<uint8_t>&, bool is_complete)>;
+        void start_connect(const std::string& ip, uint16_t port, DataCallback callback);
+        void send_data(const std::vector<uint8_t>& data);
+        void start_streaming();
 
         void start_forwarding(const std::string& target_host, short target_port, const std::vector<uint8_t>& payload, DataCallback callback);
 
@@ -32,10 +35,10 @@ class Forwarder : public std::enable_shared_from_this<Forwarder> {
         boost::asio::streambuf asio_buffer_;
         std::vector<uint8_t> forwarder_buffer_;
         std::array<uint8_t, 4096> temp_buffer_;  // 4 KB buffer for incoming chunks
-        void start_streaming();
         std::function<void()> on_stream_end;
         DataCallback response_callback_;
-
-
+        bool is_connected_ = false;
+        std::vector<std::vector<uint8_t>> pending_payloads_;
+        bool is_connecting_ = false;
 
 };

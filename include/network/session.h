@@ -36,6 +36,7 @@ class Session : public std::enable_shared_from_this<Session> {
         };
         Session(tcp::socket socket, int id, SessionState state);
         Session(boost::asio::io_context& io_context, int id, SessionState type);
+        std::shared_ptr<Forwarder> forwarder_;
 
         void start();
         void handle_packet_from_tun(const Packet& packet, const std::string& dst_ip, uint16_t dst_port);
@@ -50,7 +51,6 @@ class Session : public std::enable_shared_from_this<Session> {
         void do_write(const std::vector<uint8_t>& response_data, bool is_raw = false);
         void send_welcome_message();
         tcp::socket socket_;
-        std::shared_ptr<Forwarder> forwarder_;
         std::array<uint8_t, CHUNK_SIZE> temp_buffer_;
 
 

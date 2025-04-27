@@ -1,6 +1,7 @@
 #include "network/forwarder.h"
 #include <iostream>
 #include <stdio.h>
+#include <unistd.h>
 
 Forwarder::Forwarder(boost::asio::io_context& io_context)
     : forward_socket_(io_context), resolver_(io_context) {
@@ -27,6 +28,38 @@ void Forwarder::start_forwarding(const std::string& target_host, short target_po
             }
             self->handle_connect(ec);
         });
+}
+
+void Forwarder::start_connect(const std::string &ip, uint16_t port, DataCallback callback){
+    if (is_connecting_ || is_connected_) {
+            std::cout << "[Forwarder] Already connecting or connected, ignoring extra SYN" << std::endl;
+            return;
+    }
+    is_connecting_ = true;
+
+
+    std::cout << "Connecting to target host: " << ip << ":" << port << std::endl;
+    response_callback_ = callback;
+
+    auto self = shared_from_this();
+    boost::system::error_code ec;
+    boost::asio::ip::address address = boost::asio::ip::make_address(ip, ec);
+
+    if (ec) {
+            std::cerr << "[forwarder] Invalid IP address: " << ip << " error: " << ec.message() << std::endl;
+            return;
+    }
+    boost::asio::ip::tcp::endpoint endpoint(address, port);
+
+    forward_socket_.async_connect(endpoint, [self](const boost::system::error_code &ec){
+        if (!ec){
+            std::cout << "Connected to target host: " << std::endl;
+        }else{
+            std::cerr << "[forwarder] Error connecting to target host: " << ec.message() << std::endl;
+        }
+        self->handle_connect(ec);
+
+    });
 }
 
 void Forwarder::start_streaming(){
@@ -67,25 +100,32 @@ void Forwarder::handle_connect(const boost::system::error_code& ec){
 
         Then you call async_write(...) to send the raw decrypted payload.
     */
-    if (!ec) {
-    std::cout << "Connected to target host" << std::endl;
-    std::cout << "outbound payload size: " << outbound_payload_.size() << std::endl;
+    is_connecting_ = false;
+    if (!ec ){
+        std::cout << "connected to host" << std::endl;
+        is_connected_ = true;
+        for (const auto &payload : pending_payloads_){
+            send_data(payload);
+        }
+        pending_payloads_.clear();
+        start_streaming();
+    }else{
+        std::cerr << "[forwarder] Error connecting to target host: " << ec.message() << std::endl;
+    }
+}
 
-    if (outbound_payload_.empty()) {
-        std::cerr << "[Forwarder] Error: outbound payload is empty — aborting" << std::endl;
+void Forwarder::send_data(const std::vector<uint8_t> &data){
+    if (!is_connected_){
+        std::cout << "forwarder not connected yet" << std::endl;
+        pending_payloads_.push_back(data);
         return;
     }
     auto self = shared_from_this();
-    boost::asio::async_write(forward_socket_, boost::asio::buffer(outbound_payload_),
-        [self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 
-
-            self->handle_write(ec);
-        });
+    boost::asio::async_write(forward_socket_, boost::asio::buffer(data), [self](const boost::system::error_code& ec, std::size_t bytes_transferred){
+        self->handle_write(ec);
+    });
 }
-}
-
-
 
 
 
