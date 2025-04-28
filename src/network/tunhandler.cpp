@@ -266,6 +266,9 @@ void TunHandler::handle_incoming_packet(const std::vector<uint8_t> &sys_packet){
 
     const struct tcphdr* tcphdr = reinterpret_cast<const struct tcphdr*>(packet_ptr + iphdr->ip_hl * 4);
     uint8_t flags = tcphdr->th_flags;
+
+
+
     std::cout << "TCP flags: " << static_cast<int>(flags) << std::endl;
 
     char dst_ip[INET_ADDRSTRLEN];
@@ -322,12 +325,14 @@ void TunHandler::handle_incoming_packet(const std::vector<uint8_t> &sys_packet){
     std::cout << "Payload content in TUN: " << std::string(payload_after_headers.begin(), payload_after_headers.end()) << std::endl;
     std::cout << "Payload length: " << payload_after_headers.size() << std::endl;
     if ((flags & TH_ACK) && payload_after_headers.size() > 0) {
+        std::cout << "Sending payload to forwarder" << std::endl;
+        std::cout << "Payload content: " << std::string(payload_after_headers.begin(), payload_after_headers.end()) << std::endl;
         system_session_->forwarder_->send_data(payload_after_headers);
     }
 
 
-
 }
+
 std::vector<uint8_t> TunHandler::syn_ack_generator(const std::vector<uint8_t>& synpacket) {
     std::cout << "Generating SYN-ACK packet" << std::endl;
 

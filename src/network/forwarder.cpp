@@ -121,6 +121,7 @@ void Forwarder::send_data(const std::vector<uint8_t> &data){
         return;
     }
     auto self = shared_from_this();
+    std::cout << "sending data" << std::endl;
 
     boost::asio::async_write(forward_socket_, boost::asio::buffer(data), [self](const boost::system::error_code& ec, std::size_t bytes_transferred){
         self->handle_write(ec);
