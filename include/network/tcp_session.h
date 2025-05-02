@@ -4,9 +4,10 @@
 #include <unordered_map>
 #include <vector>
 #include <boost/asio.hpp>
-#include "network/forwarder.h"
+class Forwarder;
+class TcpSessionTable;
 
-struct TcpSession {
+struct TcpSession : public std::enable_shared_from_this<TcpSession> {  // <--- add this
     enum State {
         SYN_SENT,
         ESTABLISHED,
@@ -21,10 +22,12 @@ struct TcpSession {
 
     State state;
 
-    uint32_t client_seq;  // SEQ from the client
-    uint32_t client_ack;  // ACK from the client
-    uint32_t server_seq;  // SEQ from the server
-    uint32_t server_ack;  // ACK from the server
+    uint32_t client_seq;
+    uint32_t client_ack;
+    uint32_t server_seq;
+    uint32_t server_ack;
+
+    uint32_t server_isn = rand();
 
     std::shared_ptr<Forwarder> forwarder;
 
@@ -33,6 +36,12 @@ struct TcpSession {
                boost::asio::io_context& io_context)
         : src_ip(src_ip), src_port(src_port), dst_ip(dst_ip), dst_port(dst_port),
           state(SYN_SENT), client_seq(0), client_ack(0), server_seq(0), server_ack(0) {
-        forwarder = std::make_shared<Forwarder>(io_context);
+
     }
+
+    void set_forwarder(std::shared_ptr<Forwarder> f) {
+            forwarder = f;
+        }
+
+
 };
