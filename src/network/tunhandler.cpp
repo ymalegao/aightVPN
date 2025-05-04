@@ -67,11 +67,12 @@ static uint16_t compute_checksum(const uint8_t* data, size_t length) {
     return static_cast<uint16_t>(~reversed);
 }
 
-TunHandler::TunHandler(boost::asio::io_context &io_context, const std::string& device_name)
+TunHandler::TunHandler(boost::asio::io_context &io_context, const std::string& device_name, std::shared_ptr<CryptoManager> crypto_manager)
     : io_context_(io_context),
       tun_fd_(tunOpen(&tun_name, device_name.empty() ? nullptr : device_name.c_str())),
       tun_stream_(io_context),
-      session_table_(std::make_unique<TcpSessionTable>()) {
+      session_table_(std::make_unique<TcpSessionTable>()),
+      crypto_manager_(crypto_manager) {
 
     if (tun_fd_ < 0) {
         perror("tunOpen failed");  // Show real     reason
@@ -287,7 +288,7 @@ void TunHandler::handle_incoming_packet(const std::vector<uint8_t> &sys_packet) 
         if (flags & TH_SYN) {
             // New incoming SYN
             std::cout << "[TunHandler] New session created" << std::endl;
-            session = session_table_->create_session(src_ip, src_port, dst_ip, dst_port, io_context_);
+            session = session_table_->create_session(src_ip, src_port, dst_ip, dst_port, io_context_, crypto_manager_);
 
             auto syn_ack_packet = syn_ack_generator(sys_packet, session);
             if (!syn_ack_packet.empty()) {
@@ -354,12 +355,16 @@ void TunHandler::handle_incoming_packet(const std::vector<uint8_t> &sys_packet) 
     if (tcp_payload_length > 0 && (flags & TH_ACK)) {
         std::vector<uint8_t> payload(tcp_payload_ptr, tcp_payload_ptr + tcp_payload_length);
 
-        uint32_t original_client_seq = session->client_seq;
+        // uint32_t original_client_seq = session->client_seq;
 
         session->client_seq += tcp_payload_length;
 
         std::cout << "[TunHandler] Forwarding " << payload.size() << " bytes of application data." << std::endl;
-        session->forwarder->send_data(payload);
+        auto encrypted_payload = crypto_manager_->encrypt(sys_packet);
+        if (tunnel_callback_) {
+          tunnel_callback_(encrypted_payload);
+        }
+
 
         std::vector<uint8_t> pure_ack = generate_ack_packet(
             session->dst_ip, session->dst_port, session->src_ip, session->src_port, session
@@ -452,7 +457,7 @@ std::vector<uint8_t> TunHandler::syn_ack_generator(const std::vector<uint8_t>& s
     // const uint8_t* options_ptr = reinterpret_cast<const uint8_t*>(tcphdr_in) + sizeof(struct tcphdr);
 
     size_t tcp_header_size = sizeof(struct tcphdr);
-    size_t options_size    = 0;
+    // size_t options_size    = 0;
     std::vector<uint8_t> packet(sizeof(struct ip) + tcp_header_size);
 
     // Prepare IP header

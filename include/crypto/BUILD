@@ -1,7 +1,9 @@
 cc_library(
-    name="network_headers",
+    name="crypto_headers",
     hdrs = glob(["*h"]),
     includes = [".."],
     visibility = ["//visibility:public"],
-
+    deps = [
+        "@openssl//:openssl",
+    ],
 )

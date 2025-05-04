@@ -5,6 +5,8 @@ cc_binary(
         "//src/core:core",
         "//src/network:network",
         "@boost.asio//:boost.asio",
+        "@openssl//:crypto",
+        "//src/crypto:crypto",
 
     ],
 )

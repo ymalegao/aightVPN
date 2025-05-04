@@ -6,6 +6,7 @@ cc_library(
         "//include/network:network_headers",
         "//src/protocol:protocol",
         "//src/core:core",
-        "@boost.asio//:boost.asio"
+        "@boost.asio//:boost.asio",
+        "//src/crypto:crypto",
         ],
 )
