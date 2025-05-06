@@ -41,7 +41,7 @@ std::vector<uint8_t> CryptoManager::encrypt(const std::vector<uint8_t> &plaintex
         return {};
     }
 
-    std::cout << "Generated IV: " << std::endl;
+    // std::cout << "Generated IV: " << std::endl;
 
     //initalize encrpytion operation
 

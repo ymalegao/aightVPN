@@ -41,6 +41,7 @@ void TunHandler::async_read_from_tun(){
     auto self = shared_from_this();
     tun_stream_.async_read_some(boost::asio::buffer(read_buffer_),
         [this, self](const boost::system::error_code&ec, std::size_t n){
+            std::cout << "Handling_reda" << std::endl;
             handle_read(ec, n);
         }
     );
@@ -52,6 +53,7 @@ void TunHandler::handle_read(const boost::system::error_code& ec, std::size_t by
         return;
     }
 
+    std::cout << "bytes_transferred size" << bytes_transferred << std::endl;
     if (bytes_transferred <= TUN_HEADER_SIZE){
         async_read_from_tun();
         return;
@@ -62,7 +64,12 @@ void TunHandler::handle_read(const boost::system::error_code& ec, std::size_t by
     std::vector<uint8_t> packet(data_start, data_start + ip_len);
 
     if (tunnel_callback_){
+        std::cout << " tunnel call back exists "  << std::endl;
+
         tunnel_callback_(packet);
+    }else{
+        std::cout << "does tunnel call back exist? NO! "  << std::endl;
+
     }
 
     async_read_from_tun();
@@ -70,6 +77,13 @@ void TunHandler::handle_read(const boost::system::error_code& ec, std::size_t by
 }
 
 void TunHandler::send_to_tun(const std::vector<uint8_t>& packet) {
+    std::cout << "TUN " << (send ? "SEND" : "READ") << ": " << packet.size()
+              << " bytes, IPv" << ((packet[0] >> 4) & 0xF);
+    for(int i = 0; i < std::min(20, (int)packet.size()); i++) {
+        std::cout << " " << std::hex << (int)packet[i];
+    }
+    std::cout << std::dec << std::endl;
+
     std::vector<uint8_t> buf;
     buf.reserve(packet.size() + TUN_HEADER_SIZE);
     buf.push_back(0);

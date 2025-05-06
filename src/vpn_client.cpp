@@ -89,6 +89,7 @@ int main(int argc, char* argv[]){
         tun->set_tunnel_callback(
             [&](const std::vector<uint8_t>& pkt){
                 auto ct = crypto->encrypt(pkt);
+                std::cout << "encrypted packet and writing" << std::endl;
                 async_write_frame(ssl_sock, ct, [&](const boost::system::error_code& ec, std::size_t ){
                     if (ec) std::cerr << "Write error: " << ec.message() << "\n";
 

@@ -103,7 +103,9 @@ int main(int argc, char* argv[]){
                                 });
                         });
             tun->start();
-
+            std::system("sysctl -w net.inet.ip.forwarding=1");
+            std::system("pfctl -e");
+            std::system("echo 'nat on en0 from 10.8.0.0/24 to any -> (en0)' | pfctl -f -");
 
         std::vector<uint8_t> inbuf;
         std::function<void()> do_read = [&]{
@@ -113,7 +115,9 @@ int main(int argc, char* argv[]){
                     std::cerr<<"client→server read error: "<<ec.message()<<"\n";
                     return;
                 }
+                std::cout << "Server received encrypted packet: " << inbuf.size() << " bytes" << std::endl;
                 auto pt = crypto->decrypt(inbuf);
+                std::cout << "Decrypted packet: " << pt.size() << " bytes" << std::endl;
                 tun->send_to_tun(pt);
                 do_read();
             });

@@ -23,7 +23,7 @@ class DebugHandler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
 # Use the debug handler
-PORT = 8000
-with socketserver.TCPServer(("", PORT), DebugHandler) as httpd:
+PORT = 8080
+with socketserver.TCPServer(("0.0.0.0", PORT), DebugHandler) as httpd:
     print(f"Serving at port {PORT}")
     httpd.serve_forever()
