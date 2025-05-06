@@ -3,7 +3,9 @@ module(
 )
 
 bazel_dep(name = "boost.asio", version = "1.87.0")
+bazel_dep(name = "boost.system", version = "1.87.0")
 bazel_dep(name = "openssl", version = "3.3.1.bcr.1")
+
 
 # Hedron's Compile Commands Extractor for Bazel
 # https://github.com/hedronvision/bazel-compile-commands-extractor

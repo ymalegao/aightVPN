@@ -4,9 +4,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//include/network:network_headers",
-        "//src/protocol:protocol",
         "//src/core:core",
         "@boost.asio//:boost.asio",
         "//src/crypto:crypto",
-        ],
+        "@openssl//:crypto",
+        "@openssl//:ssl",
+    ],
 )

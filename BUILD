@@ -1,32 +1,57 @@
 cc_binary(
-    name = "vpn_app",
-    srcs = ["src/main.cpp"],
+    name = "vpn_client",
+    srcs = ["src/vpn_client.cpp"],
     deps = [
+
         "//src/core:core",
         "//src/network:network",
-        "@boost.asio//:boost.asio",
-        "@openssl//:crypto",
         "//src/crypto:crypto",
 
+        "@boost.asio//:boost.asio",
+        "@boost.system//:boost.system",
+
+        "@openssl//:crypto",
+        "@openssl//:ssl",
+
     ],
+    copts = [
+        # Turn Asio into header-only
+        "-DBOOST_ASIO_HEADER_ONLY",
+    ],
+
 )
 
 cc_binary(
-    name = "test_client",
-    srcs = ["test/test_client_spammer.cpp"],
-    deps = ["@boost.asio//:boost.asio",
-            "//src/protocol:protocol",
-            "//src/core:core",
+    name = "vpn_server",
+    srcs = ["src/vpn_server.cpp"],
+    deps = [
 
-    ]
+        "//src/core:core",
+        "//src/network:network",
+        "//src/crypto:crypto",
+
+        "@boost.asio//:boost.asio",
+        "@boost.system//:boost.system",
+
+        "@openssl//:crypto",
+        "@openssl//:ssl",
+
+    ],
+    copts = [
+        # Turn Asio into header-only
+        "-DBOOST_ASIO_HEADER_ONLY",
+    ],
+
 )
+
+
 
 load("@hedron_compile_commands//:refresh_compile_commands.bzl", "refresh_compile_commands")
 
 refresh_compile_commands(
     name = "refresh_compile_commands",
     targets = [
-        "//:vpn_app",
+        "//:vpn_client",
         "//:test_client",
     ],
     exclude_headers = "external",
