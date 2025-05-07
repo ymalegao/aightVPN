@@ -112,7 +112,8 @@ int main(int argc, char* argv[]){
             #endif
 
             tun->set_tunnel_callback(
-                        [&](auto const& pkt){
+                    std::cout << "in the tunnel callback im gonna fail now" << std::endl;
+                    [&](auto const& pkt){
                             auto ct = crypto->encrypt(pkt);
                             if (ct.empty()) {
                                 std::cerr << "encrpytion failed or returned empty payload, skipping send_to_tun.\n";
