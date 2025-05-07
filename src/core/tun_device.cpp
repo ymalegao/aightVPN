@@ -74,6 +74,9 @@ int tunOpen(TunOpenName* tun_name_out, const char* name_hint) {
 #include <linux/if_tun.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+struct TunOpenName {
+    char name[IFNAMSIZ];
+};
 
 int tunOpen(TunOpenName* tun_name_out, const char* name_hint) {
     int fd = open("/dev/net/tun", O_RDWR);
