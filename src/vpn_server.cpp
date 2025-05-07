@@ -94,6 +94,23 @@ int main(int argc, char* argv[]){
             std::string ifname = tun->get_tun_interface();
 
             std::system(("sudo ifconfig " + ifname + " 10.8.0.1 10.8.0.2 netmask 255.255.255.255 up").c_str());
+
+            #if defined(__APPLE__)
+                std::system(("sudo ifconfig " + ifname + " 10.8.0.1 10.8.0.2 netmask 255.255.255.255 up").c_str());
+                std::system("sudo sysctl -w net.inet.ip.forwarding=1");
+                std::system("sudo pfctl -e");
+                std::system("echo 'nat on en0 from 10.8.0.0/24 to any -> (en0)' | sudo pfctl -f -");
+            #elif defined(__linux__)
+                std::system(("sudo ip addr add 10.8.0.1/32 peer 10.8.0.2 dev " + ifname).c_str());
+                std::system(("sudo ip link set " + ifname + " up").c_str());
+                std::system("sudo sysctl -w net.ipv4.ip_forward=1");
+
+                // Use iptables for NAT
+                std::system("sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE");
+            #else
+                #error "Unsupported platform"
+            #endif
+
             tun->set_tunnel_callback(
                         [&](auto const& pkt){
                             auto ct = crypto->encrypt(pkt);
@@ -103,9 +120,6 @@ int main(int argc, char* argv[]){
                                 });
                         });
             tun->start();
-            std::system("sysctl -w net.inet.ip.forwarding=1");
-            std::system("pfctl -e");
-            std::system("echo 'nat on en0 from 10.8.0.0/24 to any -> (en0)' | pfctl -f -");
 
         std::vector<uint8_t> inbuf;
         std::function<void()> do_read = [&]{

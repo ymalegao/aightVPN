@@ -1,6 +1,21 @@
-#include <core/tun_device.h>
+#pragma once
+
 #include <cstring>
 #include <cerrno>
+
+struct TunOpenName {
+#if defined(__APPLE__)
+    char name[16];
+#elif defined(__linux__)
+    char name[IFNAMSIZ];
+#endif
+};
+
+// Helper macro to evaluate system calls
+#define CHK(var, call) do { var = call; if (var < 0) return -1; } while (0)
+
+#if defined(__APPLE__)
+
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -8,13 +23,9 @@
 #include <sys/kern_control.h>
 #include <net/if_utun.h>
 
-// Helper macro to evaluate system calls
-#define CHK(var, call) do { var = call; if (var < 0) return -1; } while (0)
-
 int tunOpen(TunOpenName* tun_name_out, const char* name_hint) {
     uint32_t numdev = 0;
 
-    // Parse optional device number from "utun<N>" format
     if (name_hint) {
         if (strncmp(name_hint, "utun", 4) != 0 || name_hint[4] == '\0') {
             errno = EINVAL;
@@ -28,14 +39,13 @@ int tunOpen(TunOpenName* tun_name_out, const char* name_hint) {
             }
             numdev = numdev * 10 + (*p - '0');
         }
-        numdev += 1;  // utun<N>: add 1 since utun0 = numdev = 1
+        numdev += 1;  // utun<N>: utun0 = unit 1
     }
 
     int fd;
     CHK(fd, socket(AF_SYSTEM, SOCK_DGRAM, SYSPROTO_CONTROL));
 
-    struct ctl_info info;
-    memset(&info, 0, sizeof(info));
+    struct ctl_info info = {};
     strncpy(info.ctl_name, UTUN_CONTROL_NAME, sizeof(info.ctl_name));
     int err;
     CHK(err, ioctl(fd, CTLIOCGINFO, &info));
@@ -56,3 +66,38 @@ int tunOpen(TunOpenName* tun_name_out, const char* name_hint) {
 
     return fd;
 }
+
+#elif defined(__linux__)
+
+#include <fcntl.h>
+#include <linux/if.h>
+#include <linux/if_tun.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
+int tunOpen(TunOpenName* tun_name_out, const char* name_hint) {
+    int fd = open("/dev/net/tun", O_RDWR);
+    if (fd < 0) return -1;
+
+    struct ifreq ifr = {};
+    ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+
+    if (name_hint && *name_hint) {
+        std::strncpy(ifr.ifr_name, name_hint, IFNAMSIZ);
+    }
+
+    if (ioctl(fd, TUNSETIFF, &ifr) < 0) {
+        close(fd);
+        return -1;
+    }
+
+    if (tun_name_out) {
+        std::strncpy(tun_name_out->name, ifr.ifr_name, sizeof(tun_name_out->name));
+    }
+
+    return fd;
+}
+
+#else
+#error "tunOpen is not implemented for this platform"
+#endif

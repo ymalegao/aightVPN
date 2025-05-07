@@ -108,9 +108,17 @@ int main(int argc, char* argv[]){
         };
         do_read();
 
-        std::system(("sudo ifconfig " + tun_if +
-                     " 10.8.0.2 10.8.0.1 netmask 255.255.255.255 up").c_str());
-        std::system("sudo route add default 10.8.0.1");
+        #if defined(__APPLE__)
+            std::system(("sudo ifconfig " + tun_if +
+                         " 10.8.0.2 10.8.0.1 netmask 255.255.255.255 up").c_str());
+            std::system("sudo route add default 10.8.0.1");
+        #elif defined(__linux__)
+            std::system(("sudo ip addr add 10.8.0.2/32 peer 10.8.0.1 dev " + tun_if).c_str());
+            std::system(("sudo ip link set " + tun_if + " up").c_str());
+            std::system(("sudo ip route add default via 10.8.0.1 dev " + tun_if).c_str());
+        #else
+            #error "Unsupported platform"
+        #endif
 
                 // 7) Run
         io.run();
