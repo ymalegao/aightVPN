@@ -65,13 +65,13 @@ int main(int argc, char* argv[]){
         acceptor.accept(raw_sock);
         std::cout<<"Client connected, doing TLS handshake…\n";
 
-        boost::asio::ssl::stream<tcp::socket> ssl_sock{std::move(raw_sock), ssl_ctx};
-        ssl_sock.handshake(boost::asio::ssl::stream_base::server);
+        auto ssl_sock = std::make_shared<boost::asio::ssl::stream<tcp::socket>>(std::move(raw_sock), ssl_ctx);
+        ssl_sock->handshake(boost::asio::ssl::stream_base::server);
         std::cout<<"TLS handshake complete.\n";
 
 
         std::vector<uint8_t> keybuf;
-        async_read_frame(ssl_sock, keybuf, [&](auto const& ec, std::size_t) {
+        async_read_frame(*ssl_sock, keybuf, [&](auto const& ec, std::size_t) {
             if (ec) {
                 std::cerr << "Key exchange failed: " << ec.message() << "\n";
                 return;
@@ -112,7 +112,7 @@ int main(int argc, char* argv[]){
             #endif
 
             tun->set_tunnel_callback(
-                [crypto, sock = std::move(ssl_sock)](const std::vector<uint8_t>& pkt) mutable{
+                [crypto, ssl_sock](const std::vector<uint8_t>& pkt){
                     std::cout << "[Server] Entered tunnel callback, pkt size = " << pkt.size() << "\n";
 
                     if (!crypto) {
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]){
                     auto ct = crypto->encrypt(pkt);
                     std::cout << "[Server] Encrypted packet of size " << ct.size() << "\n";
 
-                    async_write_frame(ssl_sock, ct,
+                    async_write_frame(*ssl_sock, ct,
                         [](const auto& ec, std::size_t){
                             if (ec) std::cerr << "[Server] Write error: " << ec.message() << "\n";
                         });
@@ -137,7 +137,7 @@ int main(int argc, char* argv[]){
 
         std::vector<uint8_t> inbuf;
         std::function<void()> do_read = [&]{
-        async_read_frame(ssl_sock, inbuf,
+        async_read_frame(*ssl_sock, inbuf,
             [&](auto const& ec, std::size_t){
                 if(ec){
                     std::cerr<<"client→server read error: "<<ec.message()<<"\n";
