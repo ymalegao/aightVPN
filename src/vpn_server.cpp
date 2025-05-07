@@ -114,6 +114,10 @@ int main(int argc, char* argv[]){
             tun->set_tunnel_callback(
                         [&](auto const& pkt){
                             auto ct = crypto->encrypt(pkt);
+                            if (ct.empty()) {
+                                std::cerr << "encrpytion failed or returned empty payload, skipping send_to_tun.\n";
+                                return;
+                            }
                             async_write_frame(ssl_sock, ct,
                                 [&](auto const& ec, std::size_t){
                                     if (ec) std::cerr<<"server→client write error: "<<ec.message()<<"\n";
@@ -131,7 +135,12 @@ int main(int argc, char* argv[]){
                 }
                 std::cout << "Server received encrypted packet: " << inbuf.size() << " bytes" << std::endl;
                 auto pt = crypto->decrypt(inbuf);
+                if (pt.empty()) {
+                    std::cerr << "Decryption failed or returned empty payload, skipping send_to_tun.\n";
+                    return;
+                }
                 std::cout << "Decrypted packet: " << pt.size() << " bytes" << std::endl;
+
                 tun->send_to_tun(pt);
                 do_read();
             });

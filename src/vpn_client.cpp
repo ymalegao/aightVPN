@@ -58,11 +58,16 @@ int main(int argc, char* argv[]){
         boost::asio::io_context io;
         boost::asio::ssl::context ssl_ctx(boost::asio::ssl::context::tlsv12_client);
         ssl_ctx.load_verify_file("ca.crt");
-        ssl_ctx.set_verify_mode(boost::asio::ssl::verify_peer);
+        // ssl_ctx.set_verify_mode(boost::asio::ssl::verify_peer);
 
 
         tcp::resolver resolver(io);
         auto endpoints = resolver.resolve(server_ip, std::to_string(port));
+        for (auto e: endpoints){
+            std::cout << "E is " << e.endpoint() << std::endl;
+
+        }
+
         boost::asio::ssl::stream<tcp::socket> ssl_sock(io, ssl_ctx);
         boost::asio::connect(ssl_sock.next_layer(), endpoints);
         ssl_sock.handshake(boost::asio::ssl::stream_base::client);
@@ -88,7 +93,12 @@ int main(int argc, char* argv[]){
 
         tun->set_tunnel_callback(
             [&](const std::vector<uint8_t>& pkt){
+
                 auto ct = crypto->encrypt(pkt);
+                if (ct.empty()) {
+                    std::cerr << "encrpytion failed or returned empty payload, skipping send_to_tun.\n";
+                    return;
+                }
                 std::cout << "encrypted packet and writing" << std::endl;
                 async_write_frame(ssl_sock, ct, [&](const boost::system::error_code& ec, std::size_t ){
                     if (ec) std::cerr << "Write error: " << ec.message() << "\n";
@@ -102,6 +112,13 @@ int main(int argc, char* argv[]){
             async_read_frame(ssl_sock, inbuf, [&](const boost::system::error_code& ec, std::size_t ){
                 if (ec) std::cerr << "Read error: " << ec.message() << "\n";
                 auto pt = crypto->decrypt(inbuf);
+                if (pt.empty()) {
+                    std::cerr << "Decryption failed or returned empty payload, skipping send_to_tun.\n";
+                    return;
+                }
+                std::cout << "[VPN] Received ciphertext: " << inbuf.size() << " bytes\n";
+                std::cout << "[VPN] Plaintext after decrypt: " << pt.size() << " bytes\n";
+
                 tun->send_to_tun(pt);
                 do_read();
             });
