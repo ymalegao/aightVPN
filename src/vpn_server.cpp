@@ -112,18 +112,27 @@ int main(int argc, char* argv[]){
             #endif
 
             tun->set_tunnel_callback(
-                    std::cout << "in the tunnel callback im gonna fail now" << std::endl;
-                    [&](auto const& pkt){
-                            auto ct = crypto->encrypt(pkt);
-                            if (ct.empty()) {
-                                std::cerr << "encrpytion failed or returned empty payload, skipping send_to_tun.\n";
-                                return;
-                            }
-                            async_write_frame(ssl_sock, ct,
-                                [&](auto const& ec, std::size_t){
-                                    if (ec) std::cerr<<"server→client write error: "<<ec.message()<<"\n";
-                                });
+                [crypto, sock = std::move(ssl_sock)](const std::vector<uint8_t>& pkt) mutable{
+                    std::cout << "[Server] Entered tunnel callback, pkt size = " << pkt.size() << "\n";
+
+                    if (!crypto) {
+                        std::cerr << "[Server] CRITICAL: crypto is null!\n";
+                        return;
+                    }
+
+                    if (pkt.empty()) {
+                        std::cerr << "[Server] Skipping empty packet\n";
+                        return;
+                    }
+
+                    auto ct = crypto->encrypt(pkt);
+                    std::cout << "[Server] Encrypted packet of size " << ct.size() << "\n";
+
+                    async_write_frame(ssl_sock, ct,
+                        [](const auto& ec, std::size_t){
+                            if (ec) std::cerr << "[Server] Write error: " << ec.message() << "\n";
                         });
+                });
             tun->start();
 
         std::vector<uint8_t> inbuf;
