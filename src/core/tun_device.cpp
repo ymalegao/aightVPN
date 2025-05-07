@@ -3,18 +3,13 @@
 #include <cstring>
 #include <cerrno>
 
-struct TunOpenName {
-#if defined(__APPLE__)
-    char name[16];
-#elif defined(__linux__)
-    char name[IFNAMSIZ];
-#endif
-};
 
 // Helper macro to evaluate system calls
 #define CHK(var, call) do { var = call; if (var < 0) return -1; } while (0)
 
 #if defined(__APPLE__)
+
+
 
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -22,6 +17,10 @@ struct TunOpenName {
 #include <sys/sys_domain.h>
 #include <sys/kern_control.h>
 #include <net/if_utun.h>
+
+struct TunOpenName {
+    char name[16];
+};
 
 int tunOpen(TunOpenName* tun_name_out, const char* name_hint) {
     uint32_t numdev = 0;
@@ -74,6 +73,7 @@ int tunOpen(TunOpenName* tun_name_out, const char* name_hint) {
 #include <linux/if_tun.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+
 struct TunOpenName {
     char name[IFNAMSIZ];
 };
