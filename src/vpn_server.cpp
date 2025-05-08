@@ -106,7 +106,8 @@ int main(int argc, char* argv[]){
                 std::system("sudo sysctl -w net.ipv4.ip_forward=1");
 
                 // Use iptables for NAT
-                //std::system("sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE");
+                std::string net_interface = "ens4";
+                std::system("sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o " + net_interface + " -j MASQUERADE").c_str());
             #else
                 #error "Unsupported platform"
             #endif
