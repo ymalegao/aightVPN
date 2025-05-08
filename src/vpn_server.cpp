@@ -112,7 +112,7 @@ int main(int argc, char* argv[]){
             #endif
 
             tun->set_tunnel_callback(
-                [crypto, ssl_sock](const std::vector<uint8_t>& pkt){
+                [crypto = crypto, ssl_sock = ssl_sock](const std::vector<uint8_t>& pkt){
                     std::cout << "[Server] Entered tunnel callback, pkt size = " << pkt.size() << "\n";
 
                     if (!crypto) {
