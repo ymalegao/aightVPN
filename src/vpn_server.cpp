@@ -101,13 +101,34 @@ int main(int argc, char* argv[]){
                 std::system("sudo pfctl -e");
                 std::system("echo 'nat on en0 from 10.8.0.0/24 to any -> (en0)' | sudo pfctl -f -");
             #elif defined(__linux__)
-                std::system(("sudo ip addr add 10.8.0.1/32 peer 10.8.0.2 dev " + ifname).c_str());
-                std::system(("sudo ip link set " + ifname + " up").c_str());
-                std::system("sudo sysctl -w net.ipv4.ip_forward=1");
+            std::system(("sudo ip addr add 10.8.0.1/32 peer 10.8.0.2 dev " + ifname).c_str());
+               std::system(("sudo ip link set " + ifname + " up").c_str());
+               std::system("sudo sysctl -w net.ipv4.ip_forward=1");
 
-                // Use iptables for NAT
-                std::string net_interface = "ens4";
-                std::system("sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o " + net_interface + " -j MASQUERADE").c_str());
+               // Find the internet-facing interface
+               std::string cmd = "ip route | grep default | awk '{print $5}'";
+               FILE* pipe = popen(cmd.c_str(), "r");
+               if (!pipe) {
+                   std::cerr << "Failed to identify internet interface\n";
+                   return;
+               }
+               char buffer[128];
+               std::string net_interface;
+               if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+                   net_interface = buffer;
+                   // Remove trailing newline
+                   net_interface.erase(net_interface.find_last_not_of("\n\r") + 1);
+               }
+               pclose(pipe);
+
+               if (!net_interface.empty()) {
+                   std::cout << "Using " << net_interface << " for NAT\n";
+                   std::system(("sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o " + net_interface + " -j MASQUERADE").c_str());
+                   std::system("sudo iptables -A FORWARD -s 10.8.0.0/24 -j ACCEPT");
+                   std::system("sudo iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT");
+               } else {
+                   std::cerr << "Failed to detect internet interface for NAT\n";
+               }
             #else
                 #error "Unsupported platform"
             #endif
