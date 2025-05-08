@@ -85,12 +85,17 @@ void TunHandler::send_to_tun(const std::vector<uint8_t>& packet) {
     std::cout << std::dec << std::endl;
 
     std::vector<uint8_t> buf;
+    #if defined (__APPLE__)
     buf.reserve(packet.size() + TUN_HEADER_SIZE);
     buf.push_back(0);
     buf.push_back(0);
     uint8_t af = (packet.size() >= 1 && (packet[0] >> 4) == 6) ? AF_INET6 : AF_INET;
     buf.push_back(0);
     buf.push_back(static_cast<uint8_t>(af));
+    #else
+    buf.reserve(packet.size());
+    #endif
+
     buf.insert(buf.end(), packet.begin(), packet.end());
 
     auto self = shared_from_this();
