@@ -54,14 +54,14 @@ int main(int argc, char* argv[]){
         std::string cert_file = argv[4];
         std::string key_file  = argv[5];
     try{
-        boost::asio::io_context io;
+        auto io = std::make_shared<boost::asio::io_context>();
         boost::asio::ssl::context ssl_ctx{boost::asio::ssl::context::tlsv12_server};
         ssl_ctx.use_certificate_chain_file(cert_file);
         ssl_ctx.use_private_key_file(key_file, boost::asio::ssl::context::pem);
 
-        tcp::acceptor acceptor{io, {tcp::v4(), static_cast<unsigned short>(std::stoi(listen_port))}};
+        tcp::acceptor acceptor{*io, {tcp::v4(), static_cast<unsigned short>(std::stoi(listen_port))}};
         std::cout<<"Waiting for VPN client on port "<<listen_port<<"…\n";
-        tcp::socket raw_sock{io};
+        tcp::socket raw_sock{*io};
         acceptor.accept(raw_sock);
         std::cout<<"Client connected, doing TLS handshake…\n";
 
@@ -70,14 +70,14 @@ int main(int argc, char* argv[]){
         std::cout<<"TLS handshake complete.\n";
 
 
-        std::vector<uint8_t> keybuf;
-        async_read_frame(*ssl_sock, keybuf, [&](auto const& ec, std::size_t) {
+        auto keybuf = std::make_shared<std::vector<uint8_t>>();
+        async_read_frame(*ssl_sock, *keybuf, [io, ssl_sock, keybuf, tun_if](auto const& ec, std::size_t) {
             if (ec) {
                 std::cerr << "Key exchange failed: " << ec.message() << "\n";
                 return;
             }
 
-            std::string key(keybuf.begin(), keybuf.end());
+            std::string key(keybuf->begin(), keybuf->end());
             std::cout << "Key received from client\n";
 
             // Initialize crypto with the received key
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]){
 
 
 
-            auto tun = std::make_shared<TunHandler>(io, tun_if, crypto);
+            auto tun = std::make_shared<TunHandler>(*io, tun_if, crypto);
             std::cout << "client is using TUN interface " << tun->get_tun_interface() << "\n";
             std::string ifname = tun->get_tun_interface();
 
@@ -112,7 +112,7 @@ int main(int argc, char* argv[]){
             #endif
 
             tun->set_tunnel_callback(
-                [crypto = crypto, ssl_sock = ssl_sock](const std::vector<uint8_t>& pkt){
+                [crypto, ssl_sock](const std::vector<uint8_t>& pkt){
                     std::cout << "[Server] Entered tunnel callback, pkt size = " << pkt.size() << "\n";
 
                     if (!crypto) {
@@ -139,30 +139,30 @@ int main(int argc, char* argv[]){
                 });
             tun->start();
 
-        std::vector<uint8_t> inbuf;
-        std::function<void()> do_read = [&]{
-        async_read_frame(*ssl_sock, inbuf,
-            [&](auto const& ec, std::size_t){
-                if(ec){
-                    std::cerr<<"client→server read error: "<<ec.message()<<"\n";
-                    return;
-                }
-                std::cout << "Server received encrypted packet: " << inbuf.size() << " bytes" << std::endl;
-                auto pt = crypto->decrypt(inbuf);
-                if (pt.empty()) {
-                    std::cerr << "Decryption failed or returned empty payload, skipping send_to_tun.\n";
-                    return;
-                }
-                std::cout << "Decrypted packet: " << pt.size() << " bytes" << std::endl;
-
-                tun->send_to_tun(pt);
-                do_read();
-            });
+            auto inbuf = std::make_shared<std::vector<uint8_t>>();
+            auto do_read = std::make_shared<std::function<void()>>();
+            *do_read = [ssl_sock, crypto, tun, inbuf, do_read]() {
+                async_read_frame(*ssl_sock, *inbuf,
+                [ssl_sock, crypto, tun, inbuf, do_read](const boost::system::error_code& ec, std::size_t){
+                    if(ec){
+                        std::cerr<<"client→server read error: "<<ec.message()<<"\n";
+                        return;
+                    }
+                    std::cout << "Server received encrypted packet: " << inbuf->size() << " bytes" << std::endl;
+                    auto pt = crypto->decrypt(*inbuf);
+                    if (pt.empty()) {
+                        std::cerr << "Decryption failed or returned empty payload, skipping send_to_tun.\n";
+                        return;
+                    }
+                    tun->send_to_tun(pt);
+                    (*do_read)();  // Call through the shared_ptr
+                });
         };
-        do_read();
+        (*do_read)(); // Start the first read
         });
 
-        io.run();
+        io->run();
+        return 0;
 
 
 
@@ -170,7 +170,7 @@ int main(int argc, char* argv[]){
 
 
 
-    }catch(std::exception& e){
+    } catch(std::exception& e){
         std::cerr<<"Exception: "<<e.what()<<"\n";
         return 1;
 
