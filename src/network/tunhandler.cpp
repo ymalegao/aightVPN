@@ -114,23 +114,37 @@ std::string TunHandler::get_tun_interface() const {
     return std::string(tun_name.name);
 }
 
-void TunHandler::add_route_for_domain(const std::string& domain_name,
-                                      const std::string& tun_interface)
-{
-    boost::asio::io_context ctx;
-    boost::asio::ip::tcp::resolver r(ctx);
+void TunHandler::add_route_for_domain(boost::asio::io_context& io_context, const std::string& domain_name, const std::string& tun_interface) {
+    boost::asio::ip::tcp::resolver resolver(io_context);
     boost::system::error_code ec;
-    auto results = r.resolve(domain_name, "", ec);
-    if (ec) return;
-    for (auto& entry : results) {
-        auto ip = entry.endpoint().address().to_string();
-        std::stringstream del, add;
-        del << "sudo route delete -host " << ip;
-        add << "sudo route add -host " << ip << " -interface " << tun_interface;
-        std::system(del.str().c_str());
-        std::system(add.str().c_str());
+
+    auto results = resolver.resolve(domain_name, "", ec);
+    if (ec) {
+        std::cerr << "[VPN] Failed to resolve domain name: " << domain_name << ", error = " << ec.message() << std::endl;
+        return;
+    }
+
+    for (const auto& entry : results){
+        auto ip_address = entry.endpoint().address().to_string();
+
+        std::cout << "[VPN][ROUTE] Resolved " << domain_name << " -> " << ip_address << std::endl;
+
+        // Delete any existing route to that host
+        std::stringstream del_cmd;
+        del_cmd << "sudo route delete -host " << ip_address;
+        std::cout << "[VPN][ROUTE] Deleting old route: " << del_cmd.str() << std::endl;
+        std::system(del_cmd.str().c_str());
+
+        // Add route via TUN interface
+        std::stringstream add_cmd;
+        add_cmd << "sudo route add -host " << ip_address << " -interface " << tun_interface;
+        std::cout << "[VPN][ROUTE] Adding new route: " << add_cmd.str() << std::endl;
+        std::system(add_cmd.str().c_str());
+
+        break; // Route only first resolved IP (usually good enough)
     }
 }
+
 
 
 void TunHandler::remove_route_for_domain(const std::string& domain_name,

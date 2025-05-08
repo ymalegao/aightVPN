@@ -86,9 +86,25 @@ int main(int argc, char* argv[]){
 
         auto tun = std::make_shared<TunHandler>(io, tun_if, crypto);
         std::string ifname = tun->get_tun_interface();
-        // std::system(("sudo ifconfig " + tun_if +
-        //              " inet 10.8.0.2/24 10.8.0.1 up").c_str());
-        // std::system(("sudo route add default -interface " + tun_if).c_str());
+
+        #if defined(__APPLE__)
+            std::system(("sudo ifconfig " + ifname +
+                        " 10.8.0.2 10.8.0.1 netmask 255.255.255.255 up").c_str());
+            // Don't add default route yet
+        #elif defined(__linux__)
+            std::system(("sudo ip addr add 10.8.0.2/32 peer 10.8.0.1 dev " + ifname).c_str());
+            std::system(("sudo ip link set " + ifname + " up").c_str());
+            // Don't add default route yet
+        #else
+            #error "Unsupported platform"
+        #endif
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        std::string cmd = "host example.com | grep 'has address' | awk '{print $4}' | "
+                         "xargs -I {} sudo route -n add -host {} -interface " + ifname;
+        std::system(cmd.c_str());
+        std::cout << "Added routes for example.com\n";
 
 
         tun->set_tunnel_callback(
@@ -125,17 +141,6 @@ int main(int argc, char* argv[]){
         };
         do_read();
 
-        #if defined(__APPLE__)
-            std::system(("sudo ifconfig " + tun_if +
-                         " 10.8.0.2 10.8.0.1 netmask 255.255.255.255 up").c_str());
-            std::system("sudo route add default 10.8.0.1");
-        #elif defined(__linux__)
-            std::system(("sudo ip addr add 10.8.0.2/32 peer 10.8.0.1 dev " + tun_if).c_str());
-            std::system(("sudo ip link set " + tun_if + " up").c_str());
-            std::system(("sudo ip route add default via 10.8.0.1 dev " + tun_if).c_str());
-        #else
-            #error "Unsupported platform"
-        #endif
 
                 // 7) Run
         io.run();

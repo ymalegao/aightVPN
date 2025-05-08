@@ -26,7 +26,7 @@ class TunHandler : public std::enable_shared_from_this<TunHandler>{
 
         std::string get_tun_interface() const;
 
-        static void add_route_for_domain(const std::string& domain_name,const std::string& tun_interface);
+        static void add_route_for_domain(boost::asio::io_context& io_context, const std::string& domain_name,const std::string& tun_interface);
 
         static void remove_route_for_domain(const std::string& domain_name,const std::string& tun_interface);
 

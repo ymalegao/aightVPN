@@ -126,6 +126,10 @@ int main(int argc, char* argv[]){
                     }
 
                     auto ct = crypto->encrypt(pkt);
+                    if (ct.empty()) {
+                        std::cerr << "[Server] Crypto returned empty buffer, skipping write.\n";
+                        return;
+                    }
                     std::cout << "[Server] Encrypted packet of size " << ct.size() << "\n";
 
                     async_write_frame(*ssl_sock, ct,
