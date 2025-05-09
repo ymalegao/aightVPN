@@ -77,6 +77,12 @@ void TunHandler::handle_read(const boost::system::error_code& ec, std::size_t by
 }
 
 void TunHandler::send_to_tun(const std::vector<uint8_t>& packet) {
+    if (packet.empty()) return;
+    uint8_t version = (packet[0] >> 4) & 0xF;
+       if (version != 4 && version != 6) {
+           std::cerr << "[TUN] Skipping non-IP packet (version = " << +version << ")\n";
+           return;
+       }
     std::cout << "TUN " << (send ? "SEND" : "READ") << ": " << packet.size()
               << " bytes, IPv" << ((packet[0] >> 4) & 0xF);
     for(int i = 0; i < std::min(20, (int)packet.size()); i++) {

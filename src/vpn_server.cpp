@@ -157,7 +157,10 @@ int main(int argc, char* argv[]){
                         return;
                     }
                     std::cout << "[Server] Encrypted packet of size " << ct.size() << "\n";
-
+                    std::cout << "[Server] Plain packet before encryption: ";
+                    for (size_t i = 0; i < std::min<size_t>(pkt.size(), 20); ++i)
+                        printf("%02x ", pkt[i]);
+                    std::cout << "\n";
                     async_write_frame(*ssl_sock, ct,
                         [](const auto& ec, std::size_t){
                             if (ec) std::cerr << "[Server] Write error: " << ec.message() << "\n";

@@ -132,11 +132,15 @@ int main(int argc, char* argv[]){
                     std::cerr << "Decryption failed or returned empty payload, skipping send_to_tun.\n";
                     return;
                 }
-                std::cout << "[VPN] Received ciphertext: " << inbuf.size() << " bytes\n";
-                uint8_t ipver = pt.empty() ? 0 : (pt[0] >> 4);
-                std::cout << "[VPN] Plaintext after decrypt: " << pt.size() << " bytes, version: " << +ipver << "\n";
+                std::cout << "[Client] Decrypted packet (" << pt.size() << " bytes): ";
+                for (size_t i = 0; i < std::min<size_t>(pt.size(), 20); ++i) {
+                    printf("%02x ", pt[i]);
+                }
+                std::cout << "\n";
 
-
+                uint8_t ipver = pt[0] >> 4;
+                std::cout << "[Client] IP version: " << +ipver << ", dst: "
+                          << +pt[16] << "." << +pt[17] << "." << +pt[18] << "." << +pt[19] << "\n";
                 tun->send_to_tun(pt);
                 do_read();
             });
