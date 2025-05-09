@@ -133,7 +133,9 @@ int main(int argc, char* argv[]){
                     return;
                 }
                 std::cout << "[VPN] Received ciphertext: " << inbuf.size() << " bytes\n";
-                std::cout << "[VPN] Plaintext after decrypt: " << pt.size() << " bytes\n";
+                uint8_t ipver = pt.empty() ? 0 : (pt[0] >> 4);
+                std::cout << "[VPN] Plaintext after decrypt: " << pt.size() << " bytes, version: " << +ipver << "\n";
+
 
                 tun->send_to_tun(pt);
                 do_read();

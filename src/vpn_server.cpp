@@ -104,6 +104,10 @@ int main(int argc, char* argv[]){
             std::system(("sudo ip addr add 10.8.0.1/32 peer 10.8.0.2 dev " + ifname).c_str());
                std::system(("sudo ip link set " + ifname + " up").c_str());
                std::system("sudo sysctl -w net.ipv4.ip_forward=1");
+               std::system(("sudo iptables -t mangle -A PREROUTING -i " + ifname + " -j MARK --set-mark 1").c_str());
+               std::system("sudo ip rule add fwmark 1 table 100");
+               std::system(("sudo ip route add default dev " + ifname + " table 100").c_str());
+
 
                // Find the internet-facing interface
                std::string cmd = "ip route | grep default | awk '{print $5}'";
