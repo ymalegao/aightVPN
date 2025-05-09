@@ -25,6 +25,19 @@ TunHandler::TunHandler(boost::asio::io_context& io_context,
         perror("tunOpen");
         throw std::runtime_error("Failed to open TUN device");
     }
+
+    #if defined(__linux__)
+    struct ifreq ifr;
+        memset(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, tun_name.name, IFNAMSIZ - 1);
+        ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+        if (ioctl(tun_fd_, TUNSETIFF, &ifr) < 0) {
+               std::cerr << "Warning: Could not set TUN device to NO_PI mode\n";
+               // Continue anyway, we'll handle both formats
+           } else {
+               std::cout << "TUN device set to NO_PI mode (no packet info header)\n";
+           }
+    #endif
     tun_stream_.assign(tun_fd_);
     std::cout << "Opened TUN '" << device_name_
               << "' as '" << tun_name.name << "'\n";
@@ -49,30 +62,55 @@ void TunHandler::async_read_from_tun(){
 
 void TunHandler::handle_read(const boost::system::error_code& ec, std::size_t bytes_transferred) {
     if (ec){
-        std::cerr << "Error reading from TUN device: " << ec.message() << std::endl;
-        return;
+            std::cerr << "Error reading from TUN device: " << ec.message() << std::endl;
+            return;
     }
 
-    std::cout << "bytes_transferred size" << bytes_transferred << std::endl;
-    if (bytes_transferred <= TUN_HEADER_SIZE){
-        async_read_from_tun();
-        return;
+    std::cout << "[TUN] Read " << bytes_transferred << " bytes from TUN\n";
+
+    size_t header_size = 0;
+    #if defined(__APPLE__)
+    header_size = TUN_HEADER_SIZE;  // 4 bytes on macOS
+    #elif defined(__linux__)
+
+    if (bytes_transferred > 4 && (read_buffer_[0] & 0xF0) != 0x40 && (read_buffer_[0] & 0xF0) != 0x60) {
+            // This doesn't look like an IPv4 or IPv6 packet, assume 4-byte header
+            header_size = 4;
+        }
+    #endif
+    if (bytes_transferred <= header_size){
+            std::cout << "[TUN] Packet too small (only " << bytes_transferred << " bytes), skipping\n";
+            async_read_from_tun();
+            return;
     }
 
-    const uint8_t* data_start = read_buffer_.data() + TUN_HEADER_SIZE;
-    size_t ip_len = bytes_transferred - TUN_HEADER_SIZE;
-    std::vector<uint8_t> packet(data_start, data_start + ip_len);
+    const uint8_t* data_start = read_buffer_.data() + header_size;
+    size_t ip_len = bytes_transferred - header_size;
 
-    if (tunnel_callback_){
-        std::cout << " tunnel call back exists "  << std::endl;
+    std::cout << "[TUN] IP packet: ";
+       for (size_t i = 0; i < std::min<size_t>(ip_len, 16); ++i) {
+           printf("%02x ", data_start[i]);
+       }
+       std::cout << std::endl;
 
-        tunnel_callback_(packet);
-    }else{
-        std::cout << "does tunnel call back exist? NO! "  << std::endl;
 
-    }
+       uint8_t version = (data_start[0] >> 4) & 0xF;
+          if (version != 4 && version != 6) {
+              std::cerr << "[TUN] Invalid IP version: " << +version << ", skipping packet\n";
+              async_read_from_tun();
+              return;
+          }
 
-    async_read_from_tun();
+
+
+          std::vector<uint8_t> packet(data_start, data_start + ip_len);
+
+             if (tunnel_callback_){
+                 tunnel_callback_(packet);
+             }
+
+             async_read_from_tun();
+
 
 }
 

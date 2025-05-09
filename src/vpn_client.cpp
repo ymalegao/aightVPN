@@ -130,22 +130,54 @@ int main(int argc, char* argv[]){
                 auto pt = crypto->decrypt(inbuf);
                 if (pt.empty()) {
                     std::cerr << "Decryption failed or returned empty payload, skipping send_to_tun.\n";
+                    do_read();
                     return;
                 }
-                std::cout << "[Client] Decrypted packet (" << pt.size() << " bytes): ";
-                for (size_t i = 0; i < std::min<size_t>(pt.size(), 20); ++i) {
+
+                std::cout << "[Client] Received decrypted data (" << pt.size() << " bytes): ";
+                for (size_t i = 0; i < std::min<size_t>(pt.size(), 16); ++i) {
                     printf("%02x ", pt[i]);
                 }
                 std::cout << "\n";
 
-                uint8_t ipver = pt[0] >> 4;
-                std::cout << "[Client] IP version: " << +ipver << ", dst: "
-                          << +pt[16] << "." << +pt[17] << "." << +pt[18] << "." << +pt[19] << "\n";
-                tun->send_to_tun(pt);
+                uint8_t version = (pt[0] >> 4) & 0xF;
+                if (version == 4 || version == 6) {
+                    std::cout << "[Client] Valid IPv" << +version << " packet, sending to TUN\n";
+                    tun->send_to_tun(pt);
+                }
+                else if(pt.size() > 4){
+                    version = (pt[4] >> 4) & 0xF;
+                    if (version == 4 || version == 6) {
+                        std::vector<uint8_t> ip_pkt(pt.begin() + 4, pt.end());
+                        std::cout << "[Client] Found IPv" << +version << " after 4-byte header\n";
+                        tun->send_to_tun(ip_pkt);
+                    }
+                    else if (pt.size() >= 24 && (pt[20] == 0x00 || pt[20] == 0x08) && pt[21] == 0x00) {
+                        std::cout << "[Client] Possible ICMP packet found at offset 20\n";
+                        // Construct valid IPv4 ICMP packet
+                        std::vector<uint8_t> icmp_pkt = {
+                            0x45, 0x00, 0x00, static_cast<uint8_t>(pt.size() - 16), // IPv4 header
+                            0x00, 0x00, 0x00, 0x00, // ID, flags
+                            0x40, 0x01, 0x00, 0x00, // TTL, proto (ICMP), checksum
+                            0x0a, 0x08, 0x00, 0x01, // Source: 10.8.0.1
+                            0x0a, 0x08, 0x00, 0x02  // Dest: 10.8.0.2
+                        };
+                        // Add ICMP payload
+                        icmp_pkt.insert(icmp_pkt.end(), pt.begin() + 20, pt.end());
+                        tun->send_to_tun(icmp_pkt);
+                    }
+                    else{
+                        std::cout << "[Client] Unrecognized packet format, skipping\n";
+                    }
+
+                }
                 do_read();
-            });
+
+
+                });
         };
-        do_read();
+
+                do_read();
 
 
                 // 7) Run

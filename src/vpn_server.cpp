@@ -151,19 +151,46 @@ int main(int argc, char* argv[]){
                         return;
                     }
 
-                    auto ct = crypto->encrypt(pkt);
+                    std::cout << "[Server] Packet bytes: ";
+                    for (size_t i = 0; i < std::min<size_t>(pkt.size(), 16); ++i) {
+                        printf("%02x ", pkt[i]);
+                    }
+                    std::cout << "\n";
+
+                    uint8_t version = (pkt[0] >> 4) & 0xF;
+
+                          // For Linux TUN devices, there might be extra headers or protocol info
+                    std::vector<uint8_t> ip_packet;
+
+                    if (version == 4 || version == 6){
+                        ip_packet = pkt;
+                    }
+                    else if (pkt.size() >= 4){
+                        uint8_t new_version = (pkt[4] >> 4) & 0xF;
+                        if (new_version == 4 || new_version == 6){
+                            ip_packet.assign(pkt.begin() +4, pkt.end());
+                            std::cout << "[Server] Stripped 4-byte TUN header to get IP packet\n";
+
+                        }
+                        else{
+                            ip_packet = pkt;
+                            std::cout << "[Server] Unrecognized packet format, sending as-is\n";
+
+                        }
+                    }else{
+                        ip_packet = pkt;
+                        std::cout << "in the else" << std::endl;
+                    }
+                    auto ct = crypto->encrypt(ip_packet);
                     if (ct.empty()) {
                         std::cerr << "[Server] Crypto returned empty buffer, skipping write.\n";
                         return;
                     }
                     std::cout << "[Server] Encrypted packet of size " << ct.size() << "\n";
-                    std::cout << "[Server] Plain packet before encryption: ";
-                    for (size_t i = 0; i < std::min<size_t>(pkt.size(), 20); ++i)
-                        printf("%02x ", pkt[i]);
-                    std::cout << "\n";
                     async_write_frame(*ssl_sock, ct,
-                        [](const auto& ec, std::size_t){
+                        [](const auto& ec, std::size_t sent_bytes){
                             if (ec) std::cerr << "[Server] Write error: " << ec.message() << "\n";
+                            else std::cout << "[Server] Successfu sent " << sent_bytes << std::endl;
                         });
                 });
             tun->start();
