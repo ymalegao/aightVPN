@@ -90,7 +90,9 @@ int main(int argc, char* argv[]){
         #if defined(__APPLE__)
             std::system(("sudo ifconfig " + ifname +
                         " 10.8.0.2 10.8.0.1 netmask 255.255.255.255 up").c_str());
-            // Don't add default route yet
+            std::system("sudo route add -host 8.8.8.8 10.8.0.1");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            tun->add_route_for_domain(io, "example.com", ifname);
         #elif defined(__linux__)
             std::system(("sudo ip addr add 10.8.0.2/32 peer 10.8.0.1 dev " + ifname).c_str());
             std::system(("sudo ip link set " + ifname + " up").c_str());
@@ -101,14 +103,27 @@ int main(int argc, char* argv[]){
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        std::string cmd = "host example.com | grep 'has address' | awk '{print $4}' | "
-                         "xargs -I {} sudo route -n add -host {} -interface " + ifname;
-        std::system(cmd.c_str());
-        std::cout << "Added routes for example.com\n";
+        // std::string cmd = "host example.com | grep 'has address' | awk '{print $4}' | "
+        //                  "xargs -I {} sudo route -n add -host {} -interface " + ifname;
+        // std::system(cmd.c_str());
+        // std::cout << "Added routes for example.com\n";
 
 
         tun->set_tunnel_callback(
             [&](const std::vector<uint8_t>& pkt){
+
+                if (pkt.empty()) {
+                           std::cerr << "[Client] Empty packet received from TUN, ignoring\n";
+                           return;
+                }
+
+                std::cout << "[Client] Processing packet from TUN: " << pkt.size() << " bytes, "
+                            << "IPv" << (pkt[0] >> 4);
+                if (pkt.size() >= 20) {
+                    std::cout << " src: " << +pkt[12] << "." << +pkt[13] << "." << +pkt[14] << "." << +pkt[15]
+                                << " dst: " << +pkt[16] << "." << +pkt[17] << "." << +pkt[18] << "." << +pkt[19];
+                }
+                std::cout << std::endl;
 
                 auto ct = crypto->encrypt(pkt);
                 if (ct.empty()) {
@@ -116,6 +131,7 @@ int main(int argc, char* argv[]){
                     return;
                 }
                 std::cout << "encrypted packet and writing" << std::endl;
+
                 async_write_frame(ssl_sock, ct, [&](const boost::system::error_code& ec, std::size_t ){
                     if (ec) std::cerr << "Write error: " << ec.message() << "\n";
 
@@ -126,12 +142,26 @@ int main(int argc, char* argv[]){
         std::vector<uint8_t> inbuf;
         std::function<void()> do_read = [&]{
             async_read_frame(ssl_sock, inbuf, [&](const boost::system::error_code& ec, std::size_t ){
-                if (ec) std::cerr << "Read error: " << ec.message() << "\n";
+                if (ec) {
+                           std::cerr << "Read error: " << ec.message() << "\n";
+                           if (ec == boost::asio::error::broken_pipe ||
+                                          ec == boost::asio::error::connection_reset ||
+                                          ec == boost::asio::error::eof) {
+                                          std::cerr << "[Client] Connection lost. Details: " << ec.value() << "\n";
+                                          // Handle reconnection logic here
+                                      }
+                           return;
+                       }
+
+                std::cout << "[Client] Received encrypted packet of size: " << inbuf.size() << " bytes\n";
+
                 auto pt = crypto->decrypt(inbuf);
                 if (pt.empty()) {
                     std::cerr << "Decryption failed or returned empty payload, skipping send_to_tun.\n";
+                    do_read();
                     return;
                 }
+
                 std::cout << "[Client] Decrypted packet (" << pt.size() << " bytes): ";
                 for (size_t i = 0; i < std::min<size_t>(pt.size(), 20); ++i) {
                     printf("%02x ", pt[i]);
