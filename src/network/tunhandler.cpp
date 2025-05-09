@@ -83,13 +83,12 @@ void TunHandler::send_to_tun(const std::vector<uint8_t>& packet) {
            std::cerr << "[TUN] Skipping non-IP packet (version = " << +version << ")\n";
            return;
        }
-       std::cout << "[TUN] Sending packet: " << packet.size()
-                    << " bytes, IPv" << +version;
-          if (packet.size() >= 20) {
-              std::cout << " src: " << +packet[12] << "." << +packet[13] << "." << +packet[14] << "." << +packet[15]
-                        << " dst: " << +packet[16] << "." << +packet[17] << "." << +packet[18] << "." << +packet[19];
-          }
-          std::cout << std::endl;
+    std::cout << "TUN " << (send ? "SEND" : "READ") << ": " << packet.size()
+              << " bytes, IPv" << ((packet[0] >> 4) & 0xF);
+    for(int i = 0; i < std::min(20, (int)packet.size()); i++) {
+        std::cout << " " << std::hex << (int)packet[i];
+    }
+    std::cout << std::dec << std::endl;
 
     std::vector<uint8_t> buf;
     #if defined (__APPLE__)
@@ -108,12 +107,10 @@ void TunHandler::send_to_tun(const std::vector<uint8_t>& packet) {
     auto self = shared_from_this();
     boost::asio::async_write(
         tun_stream_, boost::asio::buffer(buf),
-        [self](const boost::system::error_code& ec, std::size_t bytes_written){
+        [self](const boost::system::error_code& ec, std::size_t){
             if (ec){
                 std::cerr << "Error writing to TUN device: " << ec.message() << std::endl;
-            } else {
-                           std::cout << "Successfully wrote " << bytes_written << " bytes to TUN" << std::endl;
-                       }
+            }
         }
     );
 
