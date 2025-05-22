@@ -127,9 +127,23 @@ int main(int argc, char* argv[]){
 
                if (!net_interface.empty()) {
                    std::cout << "Using " << net_interface << " for NAT\n";
-                   std::system(("sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o " + net_interface + " -j MASQUERADE").c_str());
-                   std::system("sudo iptables -A FORWARD -s 10.8.0.0/24 -j ACCEPT");
-                   std::system("sudo iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT");
+
+                   // Clear any existing rules that might conflict
+                   std::system("sudo iptables -t nat -F POSTROUTING");
+
+                   // Set up proper masquerading
+                   std::string nat_cmd = "sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o " +
+                                         net_interface + " -j MASQUERADE";
+                   std::system(nat_cmd.c_str());
+
+                   // Allow forwarding
+                   std::system(("sudo iptables -A FORWARD -i " + ifname + " -o " +
+                               net_interface + " -j ACCEPT").c_str());
+                   std::system(("sudo iptables -A FORWARD -i " + net_interface + " -o " +
+                               ifname + " -m state --state RELATED,ESTABLISHED -j ACCEPT").c_str());
+
+                   // Fix potential MTU issues
+                   std::system("sudo iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu");
                } else {
                    std::cerr << "Failed to detect internet interface for NAT\n";
                }

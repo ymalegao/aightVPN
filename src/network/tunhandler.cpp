@@ -6,6 +6,11 @@
 #include <sstream>
 #include <cstdlib>
 
+#if defined(__linux__)
+#include <linux/if.h>
+#include <linux/if_tun.h>
+#include <sys/ioctl.h>
+#endif
 
 TunHandler::TunHandler(boost::asio::io_context& io_context,
                        const std::string& device_name,

@@ -168,6 +168,7 @@ int main(int argc, char* argv[]){
                     }
                     else{
                         std::cout << "[Client] Unrecognized packet format, skipping\n";
+                        tun->send_to_tun(pt);
                     }
 
                 }
