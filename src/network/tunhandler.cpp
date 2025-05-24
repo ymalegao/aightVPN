@@ -9,6 +9,8 @@
 #if defined(__linux__)
 #include <linux/if.h>
 #include <linux/if_tun.h>
+#include <linux/if_ether.h>
+#include <net/if.h>
 #include <sys/ioctl.h>
 #endif
 
@@ -32,6 +34,21 @@ TunHandler::TunHandler(boost::asio::io_context& io_context,
     }
 
     #if defined(__linux__)
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock >= 0) {
+        struct ifreq ifr;
+        std::memset(&ifr, 0, sizeof(ifr));
+        std::strncpy(ifr.ifr_name, tun_name.name, IFNAMSIZ);
+        ifr.ifr_flags = IFF_UP | IFF_RUNNING;
+
+        if (ioctl(sock, SIOCSIFFLAGS, &ifr) < 0) {
+            perror("ioctl(SIOCSIFFLAGS)");
+        } else {
+            std::cout << "TUN interface marked UP." << std::endl;
+        }
+
+        close(sock);
+    }
     struct ifreq ifr;
         memset(&ifr, 0, sizeof(ifr));
         strncpy(ifr.ifr_name, tun_name.name, IFNAMSIZ - 1);
